@@ -1,27 +1,17 @@
 import argparse
-import threading, sys, os, signal
+import time
 from datetime import datetime
 import requests, bs4
 from notify_run import Notify
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36"}
 
-def get_thread_count():
-    if sys.platform == "win32":
-        return (int)(os.environ["NUMBER_OF_PROCESSORS"])
-    else:
-        return (int)(os.popen("grep -c cores /proc/cpuinfo").read())
-
-def SIGSTOP(signal=None, frame=None):
-    log.info("Closing threads and exiting...")
-    stop_event.set()
-
 def parse_file(filepath):
     try:
         f = open(filepath, mode="r")
-    except:
-        log.error(f"Could not open '{filepath}', exiting.")
-        sys.exit(1)
+    except FileNotFoundError as e:
+        print(e)
+        exit(1)
     
     # Look for '#' in front of URLs. Equivalent to commenting, line will be discarded
     url_list = [line.strip() for line in f if line.strip()[0] != "#"]
@@ -69,17 +59,16 @@ class Log:
 
 class Product:
     send_push_notifications = True
-
+    
     def __init__(self, item_url):
         self._url = item_url
         self.notify_available = False
         self.notify_limited = False
         self._available = 0
+        self._status = "ERROR!"
+        self._name = ""
         
-        if not self._fetch_page():
-            self._status = "ERROR!"
-            self._name = ""
-        else:
+        if self._fetch_name():
             self._status = "OK!"
             self._name = self._fetch_name()
     
@@ -96,28 +85,30 @@ class Product:
         return self._available
     
     def __repr__(self):
-        return(f"Url:                   {self._url}\
-               \nProduct name:          {self._name}\
-               \nThread:                {threading.current_thread().name}:{threading.get_ident()}\
-               \nStatus:                {self._status}\
-               \nNotify:                ({self.notify_available},{self.notify_limited})")
+        return(f"{{{self._url}, {self._name}, {self._status}, {{{self.notify_available}, {self.notify_limited}}}}}")
     
     def __str__(self):
-        return(f"[{threading.current_thread().name}]\
+        return(f"[ITEM]\
                \nProduct name:          {self._name}\
                \nStatus:                {self._status}")
     
     def _fetch_page(self):
         try:
-            raw_html = requests.get(self._url, HEADERS)
+            raw_html = requests.get(self._url, headers=HEADERS)
+        except KeyboardInterrupt:
+            exit(0)
         except:
             return None
         
         product_page = bs4.BeautifulSoup(raw_html.text, "html.parser")
+
         return product_page
     
     def _fetch_name(self):
-        return self._fetch_page().select(".product-title-right")[0].get_text()
+        try:
+            return self._fetch_page().select(".product-title-right")[0].get_text()
+        except:
+            return None
     
     # 0=not available  1=available  2=limited  -1=error
     def is_available(self):
@@ -137,9 +128,8 @@ class Product:
             if len(target):
                 self._available = 2
             self._available = 0
-        return
 
-def track_product(product):
+def check_product(product):
     currentDate = datetime.now().strftime("%H:%M:%S")
     product.is_available()
     
@@ -165,72 +155,41 @@ def track_product(product):
     elif product.available == -1:
         log.error("Could not load webpage: 'returned empty page'")
 
-def tracker_thread(item_url, reload_interval, run_once):
-    product = Product(item_url)
-    print(product)
+def main(path, reload_interval, run_once):
+    products = [Product(url) for url in parse_file(path)]
+    
+    log.info(f"N. of items: {len(products)}")
+    [print(product) for product in products]
     
     # tracker loop
-    while not stop_event.is_set():
-        track_product(product)
-        if run_once:
-            SIGSTOP()
-        stop_event.wait(reload_interval)
-    
-    log.info(f"{threading.current_thread().name} closed.")
-    return
-
-def main(path, reload_interval, run_once, thread_count):
-    product_URLs = parse_file(path)
-    log.info(f"N. of items: {len(product_URLs)}")
-    
-    # Register stop signal handlers (unix only)
-    if sys.platform != "win32":
-        for sig in ("TERM", "HUP", "INT"):
-            signal.signal(getattr(signal, "SIG" + sig), SIGSTOP)
-    
-    # Start threads
-    threads = []
-    for url in product_URLs:
-        t = threading.Thread(target=tracker_thread, args=(url, reload_interval, run_once,))
-        threads.append(t)
-        t.start()
-    
-    # Signals are better (non-polling), but only work on unix systems.
-    # A workaround is needed for windows (poll every 5 seconds).
-    if sys.platform == "win32":
-        while not stop_event.is_set():
-            try:
-                stop_event.wait(1)
-            except KeyboardInterrupt:
-                SIGSTOP()
-    else:
-        signal.pause()
-    
-    # Cleanup before exit: join threads
-    [t.join() for t in threads if t is not None and t.is_alive()]
-    log.info("Exiting.")
+    while 1:
+        try:
+            for product in products:
+                check_product(product)
+                time.sleep(reload_interval/len(products))
+            if run_once:
+                break
+        except KeyboardInterrupt:
+            break
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Decathlon Bot. Gets URLs from a file and tracks them multithreaded.")
+    parser = argparse.ArgumentParser(description="Decathlon Bot. Gets URLs from a file and tracks availability on a set interval.")
     
     # Pass arguments to the program - default config
     parser.add_argument("-p", "--path", default="products.txt", type=str, help="Path of file containing URLs of products to track. Default: products.txt")
     parser.add_argument("-r", "--reload", default=30, type=int, help="Reload interval in seconds. Default: 30")
-    parser.add_argument("-t", "--thread", default=get_thread_count(), type=int, help="Max number of threads. Default: host logical cores")
     parser.add_argument("-o", "--once", action="store_const", const=True, help="Iterate the tracker loop once.")
     parser.add_argument("-l", "--logger", default="INFO", type=str, choices={"INFO", "WARN", "ERROR"},
                             help="Specify log level. Possible values are INFO, WARN, ERROR. Default: INFO")
     
     args = parser.parse_args()
-    stop_event = threading.Event()
     log = Log(args.logger)
     
     print(f"[CONFIG]\
           \nReload interval:       {args.reload} sec.\
-          \nRun once:              {args.once}\
+          \nRun once:              {bool(args.once)}\
           \nPath:                  {args.path}\
-          \nLog level:             {log.get_str_log_level}\
-          \nMax threads:           {args.thread}")
+          \nLog level:             {log.get_str_log_level}")
     
     endpoint = ""
     if endpoint:
@@ -239,4 +198,4 @@ if __name__ == "__main__":
         log.warn("Notify.run endpoint not set, push notifications will not be sent.")
         Product.send_push_notifications = False
     
-    main(args.path, args.reload, args.once, args.thread)
+    main(args.path, args.reload, args.once)
