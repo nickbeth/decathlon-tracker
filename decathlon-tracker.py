@@ -2,7 +2,6 @@ import argparse
 import time
 from datetime import datetime
 import requests, bs4
-from notify_run import Notify
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36"}
 
@@ -201,6 +200,7 @@ if __name__ == "__main__":
     except:
         endpoint = ""
     if len(endpoint):
+        from notify_run import Notify
         notify = Notify(endpoint=endpoint[0])
         log.info(f"Notify.run endpoint found, push notifications will be sent to {endpoint[0]}")
     else:
