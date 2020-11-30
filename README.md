@@ -1,5 +1,5 @@
 # decathlon-tracker
-A simple Decathlon product tracker in python. It is capable of tracking the availability of multiple products, but **it does not auto-buy them**!
+A simple Decathlon Italy product tracker in python. It is capable of tracking the availability of multiple products, but **it does not auto-buy them**!
 
 ## Setup
 decathlon-tracker requires `requests` and `beautifulsoup4` modules to be installed before use:
@@ -14,7 +14,7 @@ The script allows for push notifications to be sent to a [notify.run](https://no
 ```
 pip install notify-run
 ```
-Currently, channel setup is manual: modify the `endpoint` variable in the source code with your channel id that you obtained from the notify.run website. Remember to subscribe any device you want to receive notifications on to the channel.
+To setup the endpoint, create a `notify_endpoint.txt` file in the same dir of the program containing the channel id that you obtained from the notify.run website. Remember to subscribe any device you want to receive notifications on to the channel.
 
 If an endpoint is not provided, a warning message will be displayed in the console and an internal flag will be set not to send notifications, but the program will execute just fine and only print to the console.
 

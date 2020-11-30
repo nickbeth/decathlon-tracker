@@ -6,18 +6,18 @@ from notify_run import Notify
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36"}
 
+# Return parsed file as a list of lines
 def parse_file(filepath):
     try:
         f = open(filepath, mode="r")
-    except FileNotFoundError as e:
-        print(e)
-        exit(1)
+    except FileNotFoundError:
+        raise
     
     # Look for '#' in front of URLs. Equivalent to commenting, line will be discarded
-    url_list = [line.strip() for line in f if line.strip()[0] != "#"]
+    line_list = [line.strip() for line in f if line.strip()[0] != "#"]
     f.close()
     
-    return url_list
+    return line_list
 
 class Log:
     LOG_LEVEL_INFO  = 0
@@ -136,19 +136,19 @@ def check_product(product):
     if product.available == 1:
         print(f"[{currentDate}] {product.name} is available")
         if Product.send_push_notifications and not product.notify_available:
-            notify.send(f"{product.name} è disponibile su decathlon.it!")
+            notify.send(f"[Available] {product.name} available on decathlon.it!")
             product.notify_available = True
             log.info("Available notification sent")
     elif product.available == 2:
         print(f"[{currentDate}] {product.name} is available in limited quantities")
         if Product.send_push_notifications and not product.notify_limited:
-            notify.send(f"[Limitato] {product.name} è disponibile su decathlon.it!")
+            notify.send(f"[Limited] {product.name} available on decathlon.it!")
             product.notify_limited = True
             log.info("Limited quantity notification sent")
     elif product.available == 0:
         print(f"[{currentDate}] {product.name} is not available")
         if Product.send_push_notifications and (product.notify_available or product.notify_limited):
-            notify.send(f"[Esaurito] {product.name} non è più disponibile!")
+            notify.send(f"[Out of stock] {product.name} is not available anymore!")
             product.notify_available = False
             product.notify_limited = False
             log.info("Notification status reset")
@@ -156,7 +156,11 @@ def check_product(product):
         log.error("Could not load webpage: 'returned empty page'")
 
 def main(path, reload_interval, run_once):
-    products = [Product(url) for url in parse_file(path)]
+    try:
+        products = [Product(url) for url in parse_file(path)]
+    except FileNotFoundError as e:
+        print(e)
+        exit(1)
     
     log.info(f"N. of items: {len(products)}")
     [print(product) for product in products]
@@ -191,9 +195,14 @@ if __name__ == "__main__":
           \nPath:                  {args.path}\
           \nLog level:             {log.get_str_log_level}")
     
-    endpoint = ""
-    if endpoint:
-        notify = Notify(endpoint=endpoint)
+    # Notify.run endpoint setup
+    try:
+        endpoint = parse_file("notify_endpoint.txt")
+    except:
+        endpoint = ""
+    if len(endpoint):
+        notify = Notify(endpoint=endpoint[0])
+        log.info(f"Notify.run endpoint found, push notifications will be sent to {endpoint[0]}")
     else:
         log.warn("Notify.run endpoint not set, push notifications will not be sent.")
         Product.send_push_notifications = False
