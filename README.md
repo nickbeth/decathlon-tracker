@@ -19,11 +19,11 @@ To setup the endpoint, create a `notify_endpoint.txt` file in the same dir of th
 If an endpoint is not provided, a warning message will be displayed in the console and an internal flag will be set not to send notifications, but the program will execute just fine and only print to the console.
 
 ## Usage
-`Usage: decathlon-tracker.py [-h] [-p PATH] [-r RELOAD] [-o] [-l {INFO,WARN,ERROR}]`
+`Usage: decathlon-tracker.py [-h] [-p PATH] [-r RELOAD] [-o] [-l {ERROR,WARN,INFO,VERBOSE,DEBUG}]`
 
 Optional arguments:
 * -h, --help  Show this help message and exit
 * -p PATH, --path PATH  Path of file containing URLs of products to track. Default: ./products.txt
 * -r RELOAD, --reload RELOAD  Reload interval in seconds. Default: 30
 * -o, --once  Iterate the tracker loop once and exit
-* -l {INFO,WARN,ERROR}, --logger {INFO,WARN,ERROR}  Specify log level. Possible values are INFO, WARN, ERROR. Default: INFO
+* -l, --logger {ERROR,WARN,INFO,VERBOSE,DEBUG}  Specify log level. Default: INFO
